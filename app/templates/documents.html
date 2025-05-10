@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+
+{% block title %}Document History - Document Processor{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Document History</h1>
+    
+    <div class="alert alert-info" id="loading">
+        <i class="fas fa-spinner fa-spin"></i> Loading documents...
+    </div>
+    
+    <div class="alert alert-warning d-none" id="noDocuments">
+        No documents have been uploaded yet.
+    </div>
+    
+    <div class="row" id="documentList">
+        <!-- Documents will be loaded here via JavaScript -->
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', async function() {
+    try {
+        // Fetch all documents from the API
+        const response = await fetch('/api/documents');
+        const documents = await response.json();
+        
+        // Hide loading indicator
+        document.getElementById('loading').classList.add('d-none');
+        
+        // Check if there are any documents
+        if (documents.length === 0) {
+            document.getElementById('noDocuments').classList.remove('d-none');
+            return;
+        }
+        
+        // Get the container for documents
+        const documentListContainer = document.getElementById('documentList');
+        
+        // Add each document to the list
+        documents.forEach(doc => {
+            const uploadDate = new Date(doc.upload_date).toLocaleString();
+            const lineItemsCount = doc.items.length;
+            
+            const docCard = document.createElement('div');
+            docCard.className = 'col-md-6 col-lg-4 mb-4';
+            docCard.innerHTML = `
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">${doc.filename}</h5>
+                        <p class="card-text text-muted">
+                            <small>Uploaded: ${uploadDate}</small>
+                        </p>
+                        <p class="card-text">
+                            Line items: <span class="badge bg-primary">${lineItemsCount}</span>
+                        </p>
+                    </div>
+                    <div class="card-footer bg-white border-top-0">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <button class="btn btn-sm btn-outline-primary viewDocument" data-id="${doc.id}">
+                                View Details
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary exportDocument" data-id="${doc.id}">
+                                Export CSV
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            documentListContainer.appendChild(docCard);
+        });
+        
+        // Add event listeners for view buttons
+        document.querySelectorAll('.viewDocument').forEach(button => {
+            button.addEventListener('click', function() {
+                const docId = this.dataset.id;
+                window.location.href = `/document/${docId}`;
+            });
+        });
+        
+        // Add event listeners for export buttons
+        document.querySelectorAll('.exportDocument').forEach(button => {
+            button.addEventListener('click', async function() {
+                const docId = this.dataset.id;
+                
+                try {
+                    // Fetch document details
+                    const response = await fetch(`/api/documents/${docId}`);
+                    const doc = await response.json();
+                    
+                    // Create CSV content
+                    let csvContent = 'Line Item Description,Quantity,Selected Product\n';
+                    
+                    doc.items.forEach(item => {
+                        // Find selected match if any
+                        const selectedMatch = item.matches.find(match => match.is_selected);
+                        
+                        csvContent += `"${item.description}","${item.quantity || ''}","${selectedMatch ? selectedMatch.product.description : ''}"\n`;
+                    });
+                    
+                    // Create download link
+                    const encodedUri = encodeURI('data:text/csv;charset=utf-8,' + csvContent);
+                    const link = document.createElement('a');
+                    link.setAttribute('href', encodedUri);
+                    link.setAttribute('download', `document_${docId}_results.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                } catch (error) {
+                    console.error('Error exporting document:', error);
+                    alert('Error exporting document');
+                }
+            });
+        });
+        
+    } catch (error) {
+        console.error('Error fetching documents:', error);
+        document.getElementById('loading').classList.add('d-none');
+        
+        const errorAlert = document.createElement('div');
+        errorAlert.className = 'alert alert-danger';
+        errorAlert.innerText = 'Error loading documents. Please try again later.';
+        
+        document.querySelector('.container').appendChild(errorAlert);
+    }
+});
+</script>
+{% endblock %} 

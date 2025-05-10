@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}Document Detail - Document Processor{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 id="documentTitle">Document Detail</h1>
+        <a href="/" class="btn btn-outline-primary">
+            <i class="fas fa-arrow-left"></i> Back to Home
+        </a>
+    </div>
+    
+    <div class="alert alert-info" id="loading">
+        <i class="fas fa-spinner fa-spin"></i> Loading document details...
+    </div>
+    
+    <div class="alert alert-danger d-none" id="errorAlert">
+        Error loading document details.
+    </div>
+    
+    <div id="documentDetails" class="d-none">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h2 class="card-title h5" id="filename"></h2>
+                <p class="card-text text-muted" id="uploadDate"></p>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-end mb-3">
+                    <button id="exportCsvBtn" class="btn btn-success">
+                        <i class="fas fa-file-csv"></i> Export as CSV
+                    </button>
+                </div>
+                
+                <h3>Line Items</h3>
+                <div id="lineItems">
+                    <!-- Line items will be loaded here via JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get document ID from URL
+    const documentId = parseInt("{{ document_id }}");
+    let documentData = null;
+    
+    async function loadDocument() {
+        try {
+            // Fetch document details
+            const response = await fetch(`/api/documents/${documentId}`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            documentData = await response.json();
+            
+            // Hide loading indicator and show document details
+            document.getElementById('loading').classList.add('d-none');
+            document.getElementById('documentDetails').classList.remove('d-none');
+            
+            // Set document title and info
+            document.getElementById('documentTitle').textContent = documentData.filename;
+            document.getElementById('filename').textContent = documentData.filename;
+            document.getElementById('uploadDate').textContent = `Uploaded: ${new Date(documentData.upload_date).toLocaleString()}`;
+            
+            // Load line items
+            const lineItemsContainer = document.getElementById('lineItems');
+            
+            if (documentData.items.length === 0) {
+                lineItemsContainer.innerHTML = '<div class="alert alert-warning">No line items found in this document.</div>';
+            } else {
+                // Process each line item
+                documentData.items.forEach(function(item) {
+                    const itemCard = document.createElement('div');
+                    itemCard.className = 'card mb-3';
+                    itemCard.dataset.lineItemId = item.id;
+                    
+                    // Create card header
+                    const cardHeader = document.createElement('div');
+                    cardHeader.className = 'card-header d-flex justify-content-between align-items-center bg-light';
+                    
+                    // Add description and quantity
+                    const headerText = document.createElement('div');
+                    headerText.innerHTML = `<strong>${item.description}</strong> ${item.quantity ? `(Qty: ${item.quantity})` : ''}`;
+                    cardHeader.appendChild(headerText);
+                    
+                    itemCard.appendChild(cardHeader);
+                    
+                    // Create card body for matches
+                    const cardBody = document.createElement('div');
+                    cardBody.className = 'card-body';
+                    
+                    // Create list of matches
+                    const matchesList = document.createElement('div');
+                    matchesList.className = 'list-group';
+                    
+                    // Add each match
+                    if (item.matches.length === 0) {
+                        matchesList.innerHTML = '<div class="alert alert-info">No product matches found for this line item.</div>';
+                    } else {
+                        item.matches.forEach(function(match) {
+                            const matchItem = document.createElement('div');
+                            matchItem.className = 'list-group-item list-group-item-action d-flex justify-content-between align-items-center';
+                            
+                            // Add match details
+                            const matchDetails = document.createElement('div');
+                            matchDetails.innerHTML = `
+                                <div>${match.product.description}</div>
+                                <div class="text-muted small">Score: ${match.score.toFixed(2)}%</div>
+                            `;
+                            matchItem.appendChild(matchDetails);
+                            
+                            // Show if match is selected
+                            if (match.is_selected) {
+                                const selectedBadge = document.createElement('span');
+                                selectedBadge.className = 'badge bg-success';
+                                selectedBadge.innerText = 'Selected';
+                                matchItem.appendChild(selectedBadge);
+                            }
+                            
+                            matchesList.appendChild(matchItem);
+                        });
+                    }
+                    
+                    cardBody.appendChild(matchesList);
+                    itemCard.appendChild(cardBody);
+                    
+                    lineItemsContainer.appendChild(itemCard);
+                });
+            }
+            
+            // Set up export to CSV
+            document.getElementById('exportCsvBtn').addEventListener('click', function() {
+                // Create CSV content
+                let csvContent = 'Line Item Description,Quantity,Selected Product\n';
+                
+                documentData.items.forEach(function(item) {
+                    // Find selected match if any
+                    const selectedMatch = item.matches.find(function(match) {
+                        return match.is_selected;
+                    });
+                    
+                    csvContent += `"${item.description}","${item.quantity || ''}","${selectedMatch ? selectedMatch.product.description : ''}"\n`;
+                });
+                
+                // Create download link
+                const encodedUri = encodeURI('data:text/csv;charset=utf-8,' + csvContent);
+                const link = document.createElement('a');
+                link.setAttribute('href', encodedUri);
+                link.setAttribute('download', `document_${documentId}_results.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+            
+        } catch (error) {
+            console.error('Error fetching document details:', error);
+            document.getElementById('loading').classList.add('d-none');
+            document.getElementById('errorAlert').classList.remove('d-none');
+            document.getElementById('errorAlert').textContent = `Error loading document details: ${error.message}`;
+        }
+    }
+    
+    loadDocument();
+});
+</script>
+{% endblock %} 

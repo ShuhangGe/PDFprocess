@@ -1,0 +1,349 @@
+{% extends "base.html" %}
+
+{% block title %}Document Manager - PDF Processor{% endblock %}
+
+{% block head %}
+<style>
+    .document-card {
+        transition: all 0.3s ease;
+    }
+    .document-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .file-upload-container {
+        border: 2px dashed #ced4da;
+        padding: 2rem;
+        text-align: center;
+        border-radius: 0.5rem;
+        background-color: #f8f9fa;
+        margin-bottom: 2rem;
+    }
+    .file-upload-container:hover {
+        background-color: #e9ecef;
+    }
+    #documentFile {
+        display: none;
+    }
+    .document-timestamp {
+        font-size: 0.8rem;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <h1 class="mb-4">Document Manager</h1>
+    
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h2 class="h5 mb-0">Upload New Document</h2>
+                </div>
+                <div class="card-body">
+                    <form id="uploadForm" enctype="multipart/form-data">
+                        <div class="file-upload-container" id="dropArea">
+                            <i class="fas fa-file-pdf fa-3x mb-3 text-primary"></i>
+                            <h4>Drag & Drop PDF Here</h4>
+                            <p class="text-muted">or</p>
+                            <label for="documentFile" class="btn btn-primary">
+                                <i class="fas fa-upload"></i> Browse Files
+                            </label>
+                            <input class="form-control" type="file" id="documentFile" name="file" accept=".pdf" required>
+                            <p class="text-muted small mt-2">Only PDF files are accepted</p>
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-success">
+                                <i class="fas fa-upload"></i> Upload Document
+                            </button>
+                        </div>
+                    </form>
+                    <div id="uploadStatus" class="mt-3 d-none">
+                        <div class="progress">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                        </div>
+                        <p class="text-center mt-2">Uploading document, please wait...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <h2 class="mb-3">Uploaded Documents</h2>
+    
+    <div class="alert alert-info" id="loading">
+        <i class="fas fa-spinner fa-spin"></i> Loading documents...
+    </div>
+    
+    <div class="alert alert-warning d-none" id="noDocuments">
+        <i class="fas fa-info-circle"></i> No documents have been uploaded yet.
+    </div>
+    
+    <div class="row" id="documentList">
+        <!-- Documents will be loaded here via JavaScript -->
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Drag and drop functionality
+    const dropArea = document.getElementById('dropArea');
+    const fileInput = document.getElementById('documentFile');
+    
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, preventDefaults, false);
+    });
+    
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropArea.addEventListener(eventName, highlight, false);
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropArea.addEventListener(eventName, unhighlight, false);
+    });
+    
+    function highlight() {
+        dropArea.classList.add('bg-light');
+    }
+    
+    function unhighlight() {
+        dropArea.classList.remove('bg-light');
+    }
+    
+    dropArea.addEventListener('drop', handleDrop, false);
+    
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        fileInput.files = files;
+        
+        // If a PDF was dropped, show the file name
+        if (files.length > 0 && files[0].type === 'application/pdf') {
+            const fileName = document.createElement('p');
+            fileName.textContent = `Selected: ${files[0].name}`;
+            fileName.className = 'mt-2 text-success';
+            
+            // Remove any existing file name display
+            const existingFileName = dropArea.querySelector('.text-success');
+            if (existingFileName) {
+                dropArea.removeChild(existingFileName);
+            }
+            
+            dropArea.appendChild(fileName);
+        }
+    }
+    
+    // When the browse button is clicked, trigger the file input
+    dropArea.addEventListener('click', function(e) {
+        // Don't trigger if the click was on the label or the file input
+        // This prevents double-triggering the file dialog
+        if (e.target.tagName === 'LABEL' || e.target.id === 'documentFile' || e.target.closest('label')) {
+            return;
+        }
+        fileInput.click();
+    });
+    
+    // Show the selected file name when a file is selected
+    fileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            const fileName = document.createElement('p');
+            fileName.textContent = `Selected: ${this.files[0].name}`;
+            fileName.className = 'mt-2 text-success';
+            
+            // Remove any existing file name display
+            const existingFileName = dropArea.querySelector('.text-success');
+            if (existingFileName) {
+                dropArea.removeChild(existingFileName);
+            }
+            
+            dropArea.appendChild(fileName);
+        }
+    });
+    
+    // Handle form submission
+    document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        // Get form data
+        const formData = new FormData();
+        const fileInput = document.getElementById('documentFile');
+        
+        if (!fileInput.files || fileInput.files.length === 0) {
+            alert('Please select a PDF file to upload.');
+            return;
+        }
+        
+        formData.append('file', fileInput.files[0]);
+        
+        // Show loading status
+        document.getElementById('uploadStatus').classList.remove('d-none');
+        
+        try {
+            // Call API to upload document
+            const response = await fetch('/api/documents/upload', {
+                method: 'POST',
+                body: formData
+            });
+            
+            if (!response.ok) {
+                throw new Error('Upload failed');
+            }
+            
+            const data = await response.json();
+            
+            // Hide loading status
+            document.getElementById('uploadStatus').classList.add('d-none');
+            
+            // Clear the file input
+            fileInput.value = '';
+            const existingFileName = dropArea.querySelector('.text-success');
+            if (existingFileName) {
+                dropArea.removeChild(existingFileName);
+            }
+            
+            // Show success message
+            showNotification('Document uploaded successfully! Click "View & Process" to extract content.', 'success');
+            
+            // Reload documents
+            loadDocuments();
+        } catch (error) {
+            console.error('Error:', error);
+            
+            // Hide loading status and show error
+            document.getElementById('uploadStatus').classList.add('d-none');
+            showNotification('An error occurred while uploading the document.', 'danger');
+        }
+    });
+    
+    // Load documents on page load
+    loadDocuments();
+    
+    // Function to load all documents
+    async function loadDocuments() {
+        try {
+            // Show loading indicator
+            const loadingElement = document.getElementById('loading');
+            loadingElement.classList.remove('d-none');
+            
+            // Hide no documents message
+            document.getElementById('noDocuments').classList.add('d-none');
+            
+            // Clear document list
+            document.getElementById('documentList').innerHTML = '';
+            
+            // Fetch all documents
+            const response = await fetch('/api/documents');
+            const documents = await response.json();
+            
+            // Hide loading indicator
+            loadingElement.classList.add('d-none');
+            
+            // Check if there are any documents
+            if (documents.length === 0) {
+                document.getElementById('noDocuments').classList.remove('d-none');
+                return;
+            }
+            
+            // Display documents
+            const documentList = document.getElementById('documentList');
+            
+            documents.forEach(doc => {
+                const uploadDate = new Date(doc.upload_date).toLocaleString();
+                const hasItems = doc.items && doc.items.length > 0;
+                
+                const card = document.createElement('div');
+                card.className = 'col-md-6 col-lg-4 mb-4';
+                card.innerHTML = `
+                    <div class="card h-100 document-card">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <h5 class="card-title text-truncate" title="${doc.filename}">${doc.filename}</h5>
+                                ${hasItems ? '<span class="badge bg-success">Processed</span>' : '<span class="badge bg-warning">Unprocessed</span>'}
+                            </div>
+                            <p class="document-timestamp">Uploaded: ${uploadDate}</p>
+                        </div>
+                        <div class="card-footer bg-transparent border-top-0">
+                            <div class="d-flex justify-content-between">
+                                <a href="/document_view/${doc.id}" class="btn btn-primary">
+                                    <i class="fas fa-eye"></i> View & Process
+                                </a>
+                                <button class="btn btn-danger delete-doc-btn" data-id="${doc.id}" data-filename="${doc.filename}">
+                                    <i class="fas fa-trash"></i> Delete
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                documentList.appendChild(card);
+            });
+            
+            // Add event listeners for delete buttons
+            document.querySelectorAll('.delete-doc-btn').forEach(button => {
+                button.addEventListener('click', async function() {
+                    const docId = this.dataset.id;
+                    const filename = this.dataset.filename;
+                    
+                    // Confirmation dialog
+                    if (confirm(`Are you sure you want to delete "${filename}"? This action cannot be undone.`)) {
+                        try {
+                            // Call API to delete document
+                            const response = await fetch(`/api/documents/${docId}`, {
+                                method: 'DELETE'
+                            });
+                            
+                            if (!response.ok) {
+                                throw new Error('Failed to delete document');
+                            }
+                            
+                            // Show success message
+                            showNotification('Document deleted successfully', 'success');
+                            
+                            // Reload document list
+                            loadDocuments();
+                        } catch (error) {
+                            console.error('Error deleting document:', error);
+                            showNotification('An error occurred while deleting the document', 'danger');
+                        }
+                    }
+                });
+            });
+        } catch (error) {
+            console.error('Error loading documents:', error);
+            document.getElementById('loading').classList.add('d-none');
+            showNotification('Error loading documents.', 'danger');
+        }
+    }
+    
+    // Function to show notifications
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+        notification.style.top = '20px';
+        notification.style.right = '20px';
+        notification.style.zIndex = '1050';
+        notification.style.maxWidth = '400px';
+        notification.innerHTML = `
+            ${message}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            const alert = bootstrap.Alert.getOrCreateInstance(notification);
+            alert.close();
+        }, 5000);
+    }
+});
+</script>
+{% endblock %} 
