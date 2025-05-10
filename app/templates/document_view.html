@@ -1252,106 +1252,84 @@ document.addEventListener('DOMContentLoaded', async function() {
     
     // Function to export table to Excel
     function exportTableToExcel(tableData) {
-        // Create worksheet data
-        const wsData = [];
-        
-        // Add header row
-        wsData.push(tableData.columns);
-        
-        // Add data rows with mappings
-        const mappedProducts = [];
-        const table = document.getElementById('documentTable');
-        const rows = table.querySelectorAll('tbody tr');
-        
-        rows.forEach((row, index) => {
-            // Get row data
-            const rowData = tableData.rows[index];
-            
-            // Add the row to the worksheet
-            if (Array.isArray(rowData)) {
-                wsData.push(rowData);
-            } else {
-                const rowValues = tableData.columns.map(col => rowData[col] || '');
-                wsData.push(rowValues);
-            }
-            
-            // If the row has a mapped product, add it to the mappings
-            if (row.dataset.mappedProductId) {
-                mappedProducts.push({
-                    rowIndex: index,
-                    productId: row.dataset.mappedProductId,
-                    productDescription: row.dataset.mappedProductDescription
-                });
-            }
-        });
-        
-        // Add product mapping sheet if there are mappings
-        let mappingSheet = null;
-        if (mappedProducts.length > 0) {
-            mappingSheet = [
-                ['Row', 'Original Content', 'Mapped Product ID', 'Mapped Product Description']
-            ];
-            
-            mappedProducts.forEach(mapping => {
-                const rowIndex = mapping.rowIndex;
-                let originalContent = '';
-                
-                if (Array.isArray(tableData.rows[rowIndex])) {
-                    originalContent = tableData.rows[rowIndex].join(' | ');
-                } else {
-                    originalContent = Object.values(tableData.rows[rowIndex]).join(' | ');
-                }
-                
-                mappingSheet.push([
-                    rowIndex + 1,
-                    originalContent,
-                    mapping.productId,
-                    mapping.productDescription
-                ]);
-            });
-        }
-        
-        // Generate Excel file
         try {
-            // This requires SheetJS (xlsx) library to be included
-            // For now, we'll use a simplified approach with CSV
-            let csvContent = '';
+            // Show loading notification
+            showNotification('Generating Excel file...', 'info');
             
-            // Add main data
-            csvContent += '--- Document Data ---\n';
-            wsData.forEach(row => {
-                csvContent += row.map(cell => {
-                    // Quote and escape the cell value
-                    const cellStr = String(cell).replace(/"/g, '""');
-                    return `"${cellStr}"`;
-                }).join(',') + '\n';
-            });
+            // Collect all mapped products
+            const mappings = [];
+            const table = document.getElementById('documentTable');
             
-            // Add mapping data if available
-            if (mappingSheet) {
-                csvContent += '\n--- Product Mappings ---\n';
-                mappingSheet.forEach(row => {
-                    csvContent += row.map(cell => {
-                        // Quote and escape the cell value
-                        const cellStr = String(cell).replace(/"/g, '""');
-                        return `"${cellStr}"`;
-                    }).join(',') + '\n';
+            if (table) {
+                const rows = table.querySelectorAll('tbody tr');
+                
+                rows.forEach((row, index) => {
+                    // Get row data
+                    const rowData = tableData.rows[index];
+                    
+                    // If the row has a mapped product, add it to the mappings
+                    if (row.dataset.mappedProductId) {
+                        let originalContent = '';
+                        
+                        if (Array.isArray(rowData)) {
+                            originalContent = rowData.join(' | ');
+                        } else if (typeof rowData === 'object') {
+                            originalContent = Object.values(rowData).join(' | ');
+                        }
+                        
+                        mappings.push({
+                            rowIndex: index,
+                            originalContent: originalContent,
+                            productId: row.dataset.mappedProductId,
+                            productDescription: row.dataset.mappedProductDescription
+                        });
+                    }
                 });
             }
             
-            // Create download link
-            const encodedUri = encodeURI('data:text/csv;charset=utf-8,' + csvContent);
-            const link = document.createElement('a');
-            link.setAttribute('href', encodedUri);
-            link.setAttribute('download', `document_${documentId}_with_mappings.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            // Prepare data to send to the server
+            const exportData = {
+                ...tableData,
+                mappings: mappings
+            };
             
-            showNotification('Table exported successfully!', 'success');
+            // Call the API to generate Excel file
+            fetch(`/api/documents/${documentId}/export-excel`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(exportData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to generate Excel file');
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                // Create download link for the Excel file
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `document_${documentId}_export.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                
+                // Clean up
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                showNotification('Excel file generated successfully!', 'success');
+            })
+            .catch(error => {
+                console.error('Error exporting to Excel:', error);
+                showNotification('Error generating Excel file: ' + error.message, 'danger');
+            });
         } catch (error) {
-            console.error('Error exporting to Excel:', error);
-            showNotification('Error exporting table: ' + error.message, 'danger');
+            console.error('Error preparing Excel export:', error);
+            showNotification('Error preparing Excel export: ' + error.message, 'danger');
         }
     }
     

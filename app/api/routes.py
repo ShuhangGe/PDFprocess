@@ -10,6 +10,8 @@ from sqlalchemy import or_
 import tempfile
 import logging
 from fastapi.responses import FileResponse
+import xlsxwriter
+import time
 
 from app.db.database import get_db
 from app.models.models import Document, LineItem, ProductCatalog, ProductMatch
@@ -662,4 +664,116 @@ async def get_document_pdf(document_id: int):
         logger.error(f"PDF file not found: {file_path}")
         raise HTTPException(status_code=404, detail="PDF file not found")
     
-    return FileResponse(file_path, media_type="application/pdf") 
+    return FileResponse(file_path, media_type="application/pdf")
+
+@router.post("/documents/{document_id}/export-excel")
+async def export_document_to_excel(
+    document_id: int,
+    table_data: dict,
+    db: Session = Depends(get_db)
+):
+    """
+    Generate an Excel file from the table data and document mappings
+    """
+    logger.info(f"Exporting document {document_id} to Excel")
+    
+    try:
+        # Verify document exists
+        document = db.query(Document).filter(Document.id == document_id).first()
+        if not document:
+            logger.warning(f"Document not found: {document_id}")
+            raise HTTPException(status_code=404, detail="Document not found")
+        
+        # Create a temporary file for the Excel document
+        with tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False) as temp_file:
+            temp_file_path = temp_file.name
+        
+        # Create a workbook and add worksheets
+        workbook = xlsxwriter.Workbook(temp_file_path)
+        
+        # Create formats
+        header_format = workbook.add_format({
+            'bold': True,
+            'bg_color': '#0d6efd',
+            'color': 'white',
+            'border': 1
+        })
+        
+        cell_format = workbook.add_format({
+            'border': 1
+        })
+        
+        # Add Data worksheet
+        data_sheet = workbook.add_worksheet("Document Data")
+        
+        # Write headers
+        columns = table_data.get("columns", ["Content"])
+        for col_idx, header in enumerate(columns):
+            data_sheet.write(0, col_idx, header, header_format)
+        
+        # Write data rows
+        rows = table_data.get("rows", [])
+        for row_idx, row in enumerate(rows):
+            if isinstance(row, list):
+                # Array-style row
+                for col_idx, cell in enumerate(row):
+                    data_sheet.write(row_idx + 1, col_idx, cell, cell_format)
+            elif isinstance(row, dict):
+                # Object-style row with key/value pairs
+                for col_idx, col_name in enumerate(columns):
+                    data_sheet.write(row_idx + 1, col_idx, row.get(col_name, ""), cell_format)
+        
+        # Add Mappings worksheet if mappings are provided
+        if "mappings" in table_data and len(table_data["mappings"]) > 0:
+            mappings_sheet = workbook.add_worksheet("Product Mappings")
+            
+            # Write headers for mappings
+            mapping_headers = ["Row", "Original Content", "Mapped Product ID", "Mapped Product Description"]
+            for col_idx, header in enumerate(mapping_headers):
+                mappings_sheet.write(0, col_idx, header, header_format)
+            
+            # Write mapping data
+            for map_idx, mapping in enumerate(table_data["mappings"]):
+                mappings_sheet.write(map_idx + 1, 0, mapping.get("rowIndex", 0) + 1, cell_format)
+                mappings_sheet.write(map_idx + 1, 1, mapping.get("originalContent", ""), cell_format)
+                mappings_sheet.write(map_idx + 1, 2, mapping.get("productId", ""), cell_format)
+                mappings_sheet.write(map_idx + 1, 3, mapping.get("productDescription", ""), cell_format)
+            
+            # Auto-fit columns in mappings sheet
+            mappings_sheet.autofit()
+        
+        # Add document info sheet
+        info_sheet = workbook.add_worksheet("Document Info")
+        
+        # Write document info
+        info_sheet.write(0, 0, "Document ID:", workbook.add_format({'bold': True}))
+        info_sheet.write(0, 1, document_id)
+        info_sheet.write(1, 0, "Filename:", workbook.add_format({'bold': True}))
+        info_sheet.write(1, 1, document.filename)
+        info_sheet.write(2, 0, "Upload Date:", workbook.add_format({'bold': True}))
+        info_sheet.write(2, 1, document.upload_date.strftime("%Y-%m-%d %H:%M:%S"))
+        info_sheet.write(3, 0, "Export Date:", workbook.add_format({'bold': True}))
+        info_sheet.write(3, 1, time.strftime("%Y-%m-%d %H:%M:%S"))
+        
+        # Auto-fit columns in data sheet
+        data_sheet.autofit()
+        
+        # Close the workbook
+        workbook.close()
+        
+        # Return the Excel file
+        filename = f"document_{document_id}_export.xlsx"
+        return FileResponse(
+            path=temp_file_path,
+            filename=filename,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    
+    except Exception as e:
+        logger.error(f"Error exporting to Excel: {str(e)}")
+        if 'temp_file_path' in locals():
+            try:
+                os.remove(temp_file_path)
+            except:
+                pass
+        raise HTTPException(status_code=500, detail=f"Error exporting to Excel: {str(e)}") 
