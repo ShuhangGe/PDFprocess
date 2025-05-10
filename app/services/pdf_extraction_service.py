@@ -54,10 +54,8 @@ def extract_line_items_with_openai_file_processing(file: BinaryIO) -> List[Dict[
             
             Rules:
             1. Identify any tabular data in the document and preserve its structure
-            2. If the document doesn't contain tabular data, format the text in a meaningful way with appropriate columns
-            3. For general text, create columns like "Section" and "Content"
-            4. For invoices or purchase orders, identify columns like "Item", "Description", "Quantity", "Price" etc.
-            
+            2. For invoices or purchase orders, identify columns like "Item", "Description", "Quantity", "Price" etc.
+            3. Please ignore informations not in tabular
             Format your response as a JSON object with the following structure:
             {
               "table_title": "Document Content",
