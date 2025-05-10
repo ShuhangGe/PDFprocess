@@ -1,100 +1,143 @@
-# Document Processing Application
+# PDF Processing and Product Matching Application
 
-A FastAPI application for automated document processing. This application allows users to upload PDF documents, extract line items, match them with products in a catalog, and export the results.
+## Overview
 
-## Features
+This application is a comprehensive document processing system designed to extract content from PDF documents and match it with products in a catalog. It features a modern web interface, powerful OpenAI-powered PDF extraction, and intelligent product matching capabilities.
 
-- PDF document upload and processing
-- Extraction of line items from documents using an extraction API
-- Matching line items to products using a matching API
-- User verification and adjustment of matched products
-- Product catalog search functionality
-- Export results to CSV
+The system allows users to upload PDF documents, extract structured content, match each line item with potential products from a catalog, and export the processed data.
 
-## Technologies Used
+## Key Features
 
-- **Backend**: FastAPI, Python 3.8+
+- **PDF Document Upload & Management**: Upload, view, and manage PDF documents through a user-friendly interface.
+- **Advanced Text Extraction**: Extract structured text content from PDFs using OpenAI's API, automatically organizing the content in tabular format.
+- **Intelligent Product Matching**: Automatically find the 3 most similar products in the catalog for each extracted line item using semantic similarity algorithms.
+- **Interactive Table Editing**: Edit extracted table content with an intuitive interface.
+- **Product Selection Interface**: Users can select the best matching product from the top 3 suggestions or search for alternatives.
+- **Export Functionality**: Export processed data to Excel/CSV with product mappings.
+- **Modern UI**: Responsive, Bootstrap-based interface with real-time feedback and notifications.
+
+## Technology Stack
+
+- **Backend**: FastAPI (Python)
 - **Database**: PostgreSQL
 - **Frontend**: HTML, CSS, JavaScript, Bootstrap 5
-- **APIs**: External extraction and matching APIs
+- **PDF Processing**: Direct integration with OpenAI API
+- **Text Similarity**: Custom matching algorithms with SequenceMatcher
 
-## Prerequisites
+## Installation
+
+### Prerequisites
 
 - Python 3.8 or higher
 - PostgreSQL 12 or higher
-- pip (Python package manager)
+- Conda (recommended for environment management)
 
-## Installation and Setup
+### Setup Steps
 
-1. Clone the repository:
-   ```
-   git clone <repository-url>
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/yourusername/pdfprocess.git
    cd pdfprocess
    ```
 
-2. Create a virtual environment:
-   ```
-   python -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
+2. **Create and activate a Conda environment**:
+   ```bash
+   conda create -n python9 python=3.9
+   conda activate python9
    ```
 
-3. Install dependencies:
-   ```
+3. **Install dependencies**:
+   ```bash
    pip install -r requirements.txt
    ```
 
-4. Set up PostgreSQL:
-   - Install PostgreSQL if you haven't already
-   - Create a new database:
-     ```
-     createdb document_processing
-     ```
-   - If you need to use different credentials, update them in the `.env` file
-
-5. Configure environment variables in `.env` file:
+4. **Configure environment variables**:
+   Create a `.env` file in the project root with the following variables:
    ```
    DATABASE_URL=postgresql://postgres:123456@localhost:5432/document_processing
-   EXTRACTION_API_URL=https://plankton-app-qajlk.ondigitalocean.app
-   MATCHING_API_URL=https://endeavor-interview-api-gzwki.ondigitalocean.app
+   OPENAI_API_KEY=your_openai_api_key
    ```
 
-6. Initialize database tables:
-   ```
+5. **Initialize the database**:
+   ```bash
    python setup_db.py
    ```
 
-## Running the Application
+6. **Import product catalog (optional)**:
+   Place your catalog CSV file at `onsite_documents/unique_fastener_catalog.csv`.
 
-1. Start the application:
-   ```
-   python run.py
-   ```
-   Alternatively, you can use:
-   ```
-   python -m app.main
-   ```
+## Usage Guide
 
-2. Access the web application at http://localhost:8000
+### Starting the Application
 
-3. Import the product catalog by clicking the "Import Catalog" button in the navigation bar when the application is running.
+```bash
+conda activate python9
+python run.py
+```
 
-## Usage Instructions
+Access the web interface at `http://localhost:8000`.
 
-1. First, import the product catalog by clicking the "Import Catalog" button in the navigation bar.
+### Working with Documents
 
-2. Upload a PDF document using the upload form on the home page.
+1. **Upload a PDF**:
+   - Click "Upload New Document" on the home page
+   - Select a PDF file or drag and drop it into the upload area
+   - Click "Upload Document"
 
-3. Wait for the document to be processed. The system extracts line items and matches them to products in the catalog.
+2. **Process a Document**:
+   - Navigate to the document view page
+   - Click "Extract Content" to process the PDF
+   - View the extracted content in the table format
 
-4. Review the matched products for each line item.
+3. **Match Products**:
+   - For each table row, click the "Match" button to find similar products
+   - Select the most appropriate match from the top 3 suggestions
+   - Alternatively, use the custom search to find other product matches
 
-5. If needed, use the search feature to find and select a different product for any line item.
+4. **Edit Content**:
+   - Click "Edit Table" to modify any extracted content
+   - Make your changes and click "Save Changes"
 
-6. Export the results to a CSV file by clicking the "Export as CSV" button.
+5. **Export Results**:
+   - Click "Export to Excel" to download the processed data
+   - The export includes all table data and product mappings
 
 ## API Documentation
 
-API documentation is available at http://localhost:8000/docs when the application is running.
+The application provides a RESTful API for programmatic access. Visit `http://localhost:8000/docs` for the interactive API documentation.
+
+### Key Endpoints
+
+- `POST /api/documents/upload`: Upload a new PDF document
+- `POST /api/documents/{document_id}/extract`: Extract content from a document
+- `POST /api/products/search`: Search for products in the catalog
+- `POST /api/catalog/import`: Import a product catalog from CSV
+
+## Implementation Details
+
+### Custom PDF Extraction
+
+The application uses OpenAI's API to directly process PDFs:
+
+1. The PDF is uploaded directly to OpenAI
+2. A structured extraction prompt is used to extract organized content
+3. The response is formatted into a table structure for display
+4. No preprocessing is required, handling a wide variety of PDF formats
+
+### Custom Product Matching
+
+Instead of using external services, the application implements a custom similarity algorithm to match extracted text with catalog products:
+
+1. **Text Preprocessing**: Normalizes text for better comparison (lowercase, special character removal, etc.)
+2. **Similarity Calculation**: Uses a sequence matching algorithm to determine text similarity
+3. **Top-N Selection**: Returns the most relevant matches (default: 3)
+
+## Troubleshooting
+
+- **Database Connection Issues**: Ensure PostgreSQL is running and the connection string in `.env` is correct
+- **PDF Processing Errors**: Check your OpenAI API key and verify the PDF is not corrupted
+- **Product Catalog Not Found**: Make sure the CSV file exists in the specified location
+- **Import Error**: Verify that the `extract_document_content_with_llm` function is properly imported
 
 ## Project Structure
 
@@ -104,7 +147,6 @@ pdfprocess/
 │   ├── api/
 │   │   ├── __init__.py
 │   │   └── routes.py
-│   ├── core/
 │   ├── db/
 │   │   ├── __init__.py
 │   │   └── database.py
@@ -117,46 +159,64 @@ pdfprocess/
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── document_service.py
-│   │   └── custom_matcher.py
+│   │   ├── pdf_extraction_service.py  # Custom OpenAI PDF extraction
+│   │   └── custom_matcher.py          # Custom product matching implementation
 │   ├── static/
 │   │   ├── css/
-│   │   │   └── styles.css
-│   │   ├── js/
-│   │   │   └── main.js
-│   │   └── images/
+│   │   └── js/
 │   ├── templates/
 │   │   ├── base.html
-│   │   └── index.html
+│   │   ├── index.html
+│   │   └── document_view.html
 │   ├── __init__.py
 │   └── main.py
 ├── onsite_documents/
-│   ├── Example POs/
-│   │   └── (PDF files)
 │   └── unique_fastener_catalog.csv
 ├── tests/
-│   ├── __init__.py
-│   └── test_custom_matcher.py
 ├── .env
 ├── requirements.txt
 ├── setup_db.py
 └── run.py
 ```
 
-## Running Tests
+## Development Guidelines
 
-Run the tests using pytest:
-```
+### Adding New Features
+
+1. **Backend Changes**:
+   - Add new routes in `app/api/routes.py`
+   - Create/update models in `app/models/models.py`
+   - Add service functions in the appropriate service files
+
+2. **Frontend Changes**:
+   - Modify templates in `app/templates/`
+   - Add JavaScript functionality where needed
+   - Ensure responsive design is maintained
+
+### Running Tests
+
+```bash
 python -m pytest
 ```
 
-## Demo Video
+## Contributing
 
-[Link to demo video]
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/your-feature`)
+3. Commit your changes (`git commit -m 'Add some feature'`)
+4. Push to the branch (`git push origin feature/your-feature`)
+5. Create a new Pull Request
 
-## Future Improvements
+## License
 
-1. Add user authentication
-2. Improve matching algorithm with custom implementation
-3. Add batch processing for multiple documents
-4. Add document preview functionality
-5. Implement more robust error handling 
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Acknowledgements
+
+- OpenAI for the powerful API used for PDF processing
+- FastAPI team for the excellent web framework
+- Bootstrap team for the frontend framework
+
+---
+
+For questions or issues, please open an issue on the repository or contact the maintainers. 
