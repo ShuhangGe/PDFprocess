@@ -1,5 +1,5 @@
 # PDF Processing and Product Matching Application
-
+video link: https://www.loom.com/share/76c3202df9864bcbb9c1898587a461a9
 ## Overview
 
 This application is a comprehensive document processing system designed to extract content from PDF documents and match it with products in a catalog. It features a modern web interface, powerful OpenAI-powered PDF extraction, and intelligent product matching capabilities.
